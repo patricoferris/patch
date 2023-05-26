@@ -1,0 +1,33 @@
+opam-version: "2.0"
+name: "patch"
+version: "0.1.0"
+synopsis: "Patch and diff OCaml values"
+description:"Built on top of Typegist, this library allows you to diff OCaml values that have a runtime value."
+maintainer: "patrick@sirref.org"
+authors: "Patrick Ferris"
+license: "MIT"
+homepage: "https://github.com/patricoferris/patch"
+bug-reports: "https://github.com/patricoferris/patch/issues"
+depends: [
+  "dune" {>= "2.9"}
+  "ocaml" {>= "4.08.0"}
+  "typegist"
+  "mdx" {with-test}
+]
+build: [
+  ["dune" "subst"] {dev}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "--promote-install-files=false"
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+  ["dune" "install" "-p" name "--create-install-files" name]
+]
+dev-repo: "git+https://github.com/patricoferris/patch.git"
