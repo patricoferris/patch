@@ -21,7 +21,7 @@ type t = { age : int; height : int; }
 val t : t Typegist.Type.Gist.t = Typegist.Type.Gist.Record <abstr>
 ```
 
-First, some values.
+Then some values.
 
 ```ocaml
 let v0 = { age = 0; height = 0 }
