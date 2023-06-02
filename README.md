@@ -12,10 +12,8 @@ First a type with a runtime type.
 type t = { age : int; height : int; }
 # let t =
   let open Typegist.Type.Gist in
-  let age_witness = Patch.Record_witness.add (Typegist.Type.Id.make ()) Meta.empty in
-  let age = field ~meta:age_witness "age" int (fun p -> p.age) in
-  let height_witness = Patch.Record_witness.add (Typegist.Type.Id.make ()) Meta.empty in
-  let height = field ~meta:height_witness "height" int (fun p -> p.height) in
+  let age = field "age" int (fun p -> p.age) in
+  let height = field "height" int (fun p -> p.height) in
   let v age height = { age; height } in
   record "t" @@ (ctor v * age * height)
 val t : t Typegist.Type.Gist.t = Typegist.Type.Gist.Record <abstr>

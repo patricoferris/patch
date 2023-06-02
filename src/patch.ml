@@ -16,7 +16,51 @@ and ('a, 'b) field_patches =
 
 let empty = Empty
 
-module Record_witness = Type.Gist.Meta.Key (Type.Id)
+(* A notion of equality across all constructors for type gists... maybe? *)
+type (_, _) eq =
+  | Eq : ('a, 'a) eq
+
+
+let fun_eq : type a b c d. (a -> b, c -> d) eq -> (a, c) eq -> (b, d) eq = fun Eq Eq -> Eq
+
+exception Not_equal
+
+let rec eq_gist : type a b. a Type.Gist.t -> b Type.Gist.t -> (a, b) eq = fun v1 v2 ->
+  let open Type.Gist in
+  match v1, v2 with
+  | Scalar (Int _), Scalar (Int _) -> Eq
+  | Scalar (Float _), Scalar (Float _) -> Eq
+  | Scalar (Unit _), Scalar (Unit _) -> Eq
+  | Scalar (Bool _), Scalar (Bool _) -> Eq
+  | Scalar (Char _), Scalar (Char _) -> Eq
+  | Scalar (Uchar _), Scalar (Uchar _) -> Eq
+  | Scalar (Nativeint _), Scalar (Nativeint _) -> Eq
+  | Scalar (Int64 _), Scalar (Int64 _) -> Eq
+  | Scalar (Int32 _), Scalar (Int32 _) -> Eq
+  | Record r1, Record r2 -> eq_record r1 r2
+  | _ -> raise Not_equal
+
+
+  and eq_record : type a b. a Type.Gist.record -> b Type.Gist.record -> (a, b) eq = fun r1 r2 ->
+    let open Type.Gist in
+    let fields1 = Record.fields r1 in
+    let fields2 = Record.fields r2 in
+    let rec loop : type a b f g. (a, f) Type.Gist.fields -> (b, g) Type.Gist.fields -> (f, g) eq = fun f1 f2 ->
+      match f1, f2 with
+      | Ctor _, Ctor _ -> Obj.magic Eq
+      | App (next1, f1), App (next2, f2) -> (
+        let name_eq = String.equal (Type.Gist.Field.name f1) (Type.Gist.Field.name f2) in
+        if not name_eq then raise Not_equal;
+        let f = eq_gist (Type.Gist.Field.gist f1) (Type.Gist.Field.gist f2) in
+        let f_next = loop next1 next2 in
+        fun_eq f_next f
+      )
+      | _ -> raise Not_equal
+    in
+    loop fields1 fields2
+
+
+let equal_gist v1 v2 = try Some (eq_gist v1 v2) with Not_equal -> None
 
 let rec join : type a. a t -> a t -> a t =
  fun a b ->
@@ -26,6 +70,7 @@ let rec join : type a. a t -> a t -> a t =
   | Scalar (Unit m, ()), Scalar (Unit _, ()) -> Scalar (Unit m, ())
   | Scalar (Bool b, _), Scalar (Bool _, b2) -> Scalar (Bool b, b2)
   | Scalar (Char c, _), Scalar (Char _, b2) -> Scalar (Char c, b2)
+  | Scalar (Float f, _), Scalar (Float _, f2) -> Scalar (Float f, f2)
   | Scalar (Int i, i1), Scalar (Int _, i2) -> Scalar (Int i, i1 + i2)
   | List l1, List l2 ->
       let rec aux acc a b =
@@ -47,24 +92,15 @@ let rec join : type a. a t -> a t -> a t =
         match (a, b) with
         | Ctor c, Ctor _ -> Ctor c
         | App (f1, p1, next1), App (f2, p2, next2) -> (
-            (* TODO: Do we HAVE to have type witnesses here ? :( *)
-            let m1 = Type.Gist.Field.meta f1 in
-            let m2 = Type.Gist.Field.meta f2 in
-            let w1 = Record_witness.find m1 in
-            let w2 = Record_witness.find m2 in
-            match (w1, w2) with
-            | Some w1, Some w2 -> (
-                match Type.Id.provably_equal w1 w2 with
-                | Some Equal -> App (f1, join p1 p2, merge next1 next2)
-                | None -> failwith "Types of record fields are not equal")
-            | _ ->
-                failwith
-                  "Records must be augmented with type witnesses to join \
-                   patches")
+          match equal_gist (Type.Gist.Field.gist f1) (Type.Gist.Field.gist f2) with
+          | Some Eq -> App (f1, join p1 p2, merge next1 next2)
+          | None -> failwith "Failed to prove fields equal type!"
+          )
         | _ -> assert false
       in
       Record { fields = merge p1.fields p2.fields }
   | _ -> assert false
+
 
 let rec diff : type a. a Type.Gist.t -> a -> a -> a t =
  fun typ v1 v2 ->
@@ -74,8 +110,11 @@ let rec diff : type a. a Type.Gist.t -> a -> a -> a t =
   | Scalar (Int32 v) -> Scalar (Int32 v, Int32.sub v2 v1)
   | Scalar (Int64 v) -> Scalar (Int64 v, Int64.sub v2 v1)
   | Scalar (Char v) -> Scalar (Char v, v2)
+  | Scalar (Uchar v) -> Scalar (Uchar v, v2)
   | Scalar (Bool v) -> Scalar (Bool v, v2)
-  | Scalar (Float v) -> Scalar (Float v, v2 -. v1)
+  | Scalar (Nativeint v) -> Scalar (Nativeint v, Nativeint.sub v2 v1)
+  (* Probably better off just keeping the second value for floats *)
+  | Scalar (Float v) -> Scalar (Float v, v2)
   | Record r -> diff_record r v1 v2
   | _ -> assert false
 
