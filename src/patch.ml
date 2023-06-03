@@ -174,14 +174,15 @@ and eq_variant : type v1 v2. v1 Type.Gist.variant -> v2 Type.Gist.variant -> (v1
   if not b then raise Not_equal;
   let v1s = Variant.cases v1 in
   let v2s = Variant.cases v2 in
-  let rec loop : type a b. a product list -> b product list -> (a, b) eq = fun p1 p2 -> match p1, p2 with
-    | [], [] -> Obj.magic Eq
+  let rec loop : type a b. a product list -> b product list -> (a, b) eq list -> (a, b) eq list = fun p1 p2 acc -> match p1, p2 with
+    | [], [] -> acc
     | p1::p1s, p2::p2s ->
-      let Eq = eq_record p1 p2 in
-      loop p1s p2s
+      let e = eq_record p1 p2 in
+      loop p1s p2s (e :: acc)
     | _ -> raise Not_equal
   in
-  loop v1s v2s
+  let eq_list : type a b. (a, b) eq list -> (a, b) eq = fun lst -> List.hd lst in
+  eq_list @@ loop v1s v2s []
 
 let equal_gist v1 v2 = try Some (eq_gist v1 v2) with Not_equal -> None
 
